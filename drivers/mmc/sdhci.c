@@ -432,7 +432,7 @@ static int sdhci_init(struct mmc *mmc)
 {
 	struct sdhci_host *host = mmc->priv;
 
-
+/*
 #if CONFIG_IS_ENABLED(DM_MMC)
         struct udevice *dev = mmc->dev;
 
@@ -449,7 +449,7 @@ static int sdhci_init(struct mmc *mmc)
 #endif
             }
 #endif
-
+*/
 
 
 	if ((host->quirks & SDHCI_QUIRK_32BIT_DMA_ADDR) && !aligned_buffer) {

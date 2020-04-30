@@ -5,12 +5,11 @@
  * Licensed under the GPL-2 or later.
  */
 #include <common.h>
-#include <errno.h>
 #include <malloc.h>
 #include <part.h>
 #include <mmc.h>
 #include <spi.h>
-#include <u-boot/crc.h>
+#include <crc.h>
 #include <linux/crc7.h>
 #include <asm/byteorder.h>
 
@@ -183,13 +182,13 @@ static int mmc_spi_request(struct mmc *mmc, struct mmc_cmd *cmd,
 	spi_cs_activate(spi);
 	r1 = mmc_spi_sendcmd(mmc, cmd->cmdidx, cmd->cmdarg);
 	if (r1 == 0xff) { /* no response */
-		ret = -ENOMEDIUM;
+		ret = NO_CARD_ERR;
 		goto done;
 	} else if (r1 & R1_SPI_COM_CRC) {
-		ret = -ECOMM;
+		ret = COMM_ERR;
 		goto done;
 	} else if (r1 & ~R1_SPI_IDLE) { /* other errors */
-		ret = -ETIMEDOUT;
+		ret = TIMEOUT;
 		goto done;
 	} else if (cmd->resp_type == MMC_RSP_R2) {
 		r1 = mmc_spi_readdata(mmc, cmd->response, 1, 16);
@@ -226,9 +225,9 @@ static int mmc_spi_request(struct mmc *mmc, struct mmc_cmd *cmd,
 				data->blocks, data->blocksize,
 				(cmd->cmdidx == MMC_CMD_WRITE_MULTIPLE_BLOCK));
 		if (r1 & R1_SPI_COM_CRC)
-			ret = -ECOMM;
+			ret = COMM_ERR;
 		else if (r1) /* other errors */
-			ret = -ETIMEDOUT;
+			ret = TIMEOUT;
 	}
 done:
 	spi_cs_deactivate(spi);
@@ -236,14 +235,13 @@ done:
 	return ret;
 }
 
-static int mmc_spi_set_ios(struct mmc *mmc)
+static void mmc_spi_set_ios(struct mmc *mmc)
 {
 	struct spi_slave *spi = mmc->priv;
 
 	debug("%s: clock %u\n", __func__, mmc->clock);
 	if (mmc->clock)
 		spi_set_speed(spi, mmc->clock);
-	return 0;
 }
 
 static int mmc_spi_init_p(struct mmc *mmc)

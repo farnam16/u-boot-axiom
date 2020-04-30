@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Freescale i.MX28 SSP MMC driver
  *
@@ -15,16 +14,18 @@
  * Based vaguely on the pxa mmc code:
  * (C) Copyright 2003
  * Kyle Harris, Nexus Technologies, Inc. kharris@nexus-tech.net
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <malloc.h>
 #include <mmc.h>
-#include <linux/errno.h>
+#include <asm/errno.h>
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/sys_proto.h>
-#include <asm/mach-imx/dma.h>
+#include <asm/imx-common/dma.h>
 #include <bouncebuf.h>
 
 struct mxsmmc_priv {
@@ -83,7 +84,7 @@ static int mxsmmc_send_cmd_pio(struct mxsmmc_priv *priv, struct mmc_data *data)
 		}
 	}
 
-	return timeout ? 0 : -ECOMM;
+	return timeout ? 0 : COMM_ERR;
 }
 
 static int mxsmmc_send_cmd_dma(struct mxsmmc_priv *priv, struct mmc_data *data)
@@ -119,7 +120,7 @@ static int mxsmmc_send_cmd_dma(struct mxsmmc_priv *priv, struct mmc_data *data)
 	mxs_dma_desc_append(dmach, priv->desc);
 	if (mxs_dma_go(dmach)) {
 		bounce_buffer_stop(&bbstate);
-		return -ECOMM;
+		return COMM_ERR;
 	}
 
 	bounce_buffer_stop(&bbstate);
@@ -157,13 +158,13 @@ mxsmmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct mmc_data *data)
 
 	if (!timeout) {
 		printf("MMC%d: Bus busy timeout!\n", mmc->block_dev.devnum);
-		return -ETIMEDOUT;
+		return TIMEOUT;
 	}
 
 	/* See if card is present */
 	if (!mxsmmc_cd(priv)) {
 		printf("MMC%d: No card detected!\n", mmc->block_dev.devnum);
-		return -ENOMEDIUM;
+		return NO_CARD_ERR;
 	}
 
 	/* Start building CTRL0 contents */
@@ -202,7 +203,7 @@ mxsmmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct mmc_data *data)
 			priv->mmc_is_wp(mmc->block_dev.devnum)) {
 			printf("MMC%d: Can not write a locked card!\n",
 				mmc->block_dev.devnum);
-			return -EOPNOTSUPP;
+			return UNUSABLE_ERR;
 		}
 
 		ctrl0 |= SSP_CTRL0_DATA_XFER;
@@ -243,21 +244,21 @@ mxsmmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct mmc_data *data)
 	if (!timeout) {
 		printf("MMC%d: Command %d busy\n",
 			mmc->block_dev.devnum, cmd->cmdidx);
-		return -ETIMEDOUT;
+		return TIMEOUT;
 	}
 
 	/* Check command timeout */
 	if (reg & SSP_STATUS_RESP_TIMEOUT) {
 		printf("MMC%d: Command %d timeout (status 0x%08x)\n",
 			mmc->block_dev.devnum, cmd->cmdidx, reg);
-		return -ETIMEDOUT;
+		return TIMEOUT;
 	}
 
 	/* Check command errors */
 	if (reg & (SSP_STATUS_RESP_CRC_ERR | SSP_STATUS_RESP_ERR)) {
 		printf("MMC%d: Command %d error (status 0x%08x)!\n",
 			mmc->block_dev.devnum, cmd->cmdidx, reg);
-		return -ECOMM;
+		return COMM_ERR;
 	}
 
 	/* Copy response to response buffer */
@@ -297,13 +298,13 @@ mxsmmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct mmc_data *data)
 		SSP_STATUS_FIFO_OVRFLW | SSP_STATUS_FIFO_UNDRFLW)) {
 		printf("MMC%d: Data error with command %d (status 0x%08x)!\n",
 			mmc->block_dev.devnum, cmd->cmdidx, reg);
-		return -ECOMM;
+		return COMM_ERR;
 	}
 
 	return 0;
 }
 
-static int mxsmmc_set_ios(struct mmc *mmc)
+static void mxsmmc_set_ios(struct mmc *mmc)
 {
 	struct mxsmmc_priv *priv = mmc->priv;
 	struct mxs_ssp_regs *ssp_regs = priv->regs;
@@ -330,8 +331,6 @@ static int mxsmmc_set_ios(struct mmc *mmc)
 
 	debug("MMC%d: Set %d bits bus width\n",
 		mmc->block_dev.devnum, mmc->bus_width);
-
-	return 0;
 }
 
 static int mxsmmc_init(struct mmc *mmc)

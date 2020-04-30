@@ -1,7 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2015 Google, Inc
  * Written by Simon Glass <sjg@chromium.org>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -10,6 +11,8 @@
 #include <fdtdec.h>
 #include <mmc.h>
 #include <asm/test.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 struct sandbox_mmc_plat {
 	struct mmc_config cfg;
@@ -22,7 +25,7 @@ struct sandbox_mmc_plat {
  * This emulate an SD card version 2. Single-block reads result in zero data.
  * Multiple-block reads return a test string.
  */
-static int sandbox_mmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
+static int sandbox_mmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd,
 				struct mmc_data *data)
 {
 	switch (cmd->cmdidx) {
@@ -45,12 +48,9 @@ static int sandbox_mmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 		cmd->response[1] = 10 << 16;	/* 1 << block_len */
 		break;
 	case SD_CMD_SWITCH_FUNC: {
-		if (!data)
-			break;
 		u32 *resp = (u32 *)data->dest;
+
 		resp[7] = cpu_to_be32(SD_HIGHSPEED_BUSY);
-		if ((cmd->cmdarg & 0xF) == UHS_SDR12_BUS_SPEED)
-			resp[4] = (cmd->cmdarg & 0xF) << 24;
 		break;
 	}
 	case MMC_CMD_READ_SINGLE_BLOCK:
@@ -85,20 +85,25 @@ static int sandbox_mmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 	return 0;
 }
 
-static int sandbox_mmc_set_ios(struct udevice *dev)
+static void sandbox_mmc_set_ios(struct mmc *mmc)
+{
+}
+
+static int sandbox_mmc_init(struct mmc *mmc)
 {
 	return 0;
 }
 
-static int sandbox_mmc_get_cd(struct udevice *dev)
+static int sandbox_mmc_getcd(struct mmc *mmc)
 {
 	return 1;
 }
 
-static const struct dm_mmc_ops sandbox_mmc_ops = {
+static const struct mmc_ops sandbox_mmc_ops = {
 	.send_cmd = sandbox_mmc_send_cmd,
 	.set_ios = sandbox_mmc_set_ios,
-	.get_cd = sandbox_mmc_get_cd,
+	.init = sandbox_mmc_init,
+	.getcd = sandbox_mmc_getcd,
 };
 
 int sandbox_mmc_probe(struct udevice *dev)
@@ -112,15 +117,21 @@ int sandbox_mmc_bind(struct udevice *dev)
 {
 	struct sandbox_mmc_plat *plat = dev_get_platdata(dev);
 	struct mmc_config *cfg = &plat->cfg;
+	int ret;
 
 	cfg->name = dev->name;
+	cfg->ops = &sandbox_mmc_ops;
 	cfg->host_caps = MMC_MODE_HS_52MHz | MMC_MODE_HS | MMC_MODE_8BIT;
 	cfg->voltages = MMC_VDD_165_195 | MMC_VDD_32_33 | MMC_VDD_33_34;
 	cfg->f_min = 1000000;
 	cfg->f_max = 52000000;
 	cfg->b_max = U32_MAX;
 
-	return mmc_bind(dev, &plat->mmc, cfg);
+	ret = mmc_bind(dev, &plat->mmc, cfg);
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 int sandbox_mmc_unbind(struct udevice *dev)
@@ -139,7 +150,6 @@ U_BOOT_DRIVER(mmc_sandbox) = {
 	.name		= "mmc_sandbox",
 	.id		= UCLASS_MMC,
 	.of_match	= sandbox_mmc_ids,
-	.ops		= &sandbox_mmc_ops,
 	.bind		= sandbox_mmc_bind,
 	.unbind		= sandbox_mmc_unbind,
 	.probe		= sandbox_mmc_probe,

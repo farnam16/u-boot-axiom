@@ -126,7 +126,7 @@ static int sdhci_transfer_data(struct sdhci_host *host, struct mmc_data *data,
 #ifndef CONFIG_SDHCI_CMD_MAX_TIMEOUT
 #define CONFIG_SDHCI_CMD_MAX_TIMEOUT		3200
 #endif
-#define CONFIG_SDHCI_CMD_DEFAULT_TIMEOUT	10000
+#define CONFIG_SDHCI_CMD_DEFAULT_TIMEOUT	100
 #define SDHCI_READ_STATUS_TIMEOUT		1000
 
 static int sdhci_send_command(struct mmc *mmc, struct mmc_cmd *cmd,
